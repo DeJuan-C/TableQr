@@ -6,11 +6,11 @@ import { map } from 'rxjs';
 import { QRCodeComponent } from 'angularx-qrcode';
 import { CashierLayout } from '../../../components/cashier-layout/cashier-layout';
 import { BillCard } from '../../../components/bill-card/bill-card';
-import { CashierStore, type PaymentMethod } from '../../../store/cashier-store';
+import { CashierStore, type PaymentMethod, type DiscountType } from '../../../store/cashier-store';
 import { KitchenStore } from '../../../store/kitchen-store';
 import { InventoryStore } from '../../../store/inventory-store';
 import { SupabaseService } from '../../../store/supabase.service';
-import { NotificationStore } from '../../../store/notification-store'; // NEW
+import { NotificationStore } from '../../../store/notification-store';
 import type { Category } from '../../../data/menu';
 
 @Component({
@@ -25,17 +25,16 @@ export class BillSettlement implements OnInit, OnDestroy {
   private kitchen = inject(KitchenStore);
   private inventory = inject(InventoryStore);
   private supabase = inject(SupabaseService).client;
-  private notif = inject(NotificationStore); // NEW
+  private notif = inject(NotificationStore);
 
   private paymongoPublicKey = 'pk_test_JiDAPj2j4dFiJpyoDxxqY1Li:';
   private refreshInterval: any;
   private pollInterval: any;
-  private previousBillCount = 0; // NEW
+  private previousBillCount = 0;
 
   paymentMode = signal<'cash' | 'qr'>('cash');
   drawer = this.store.cashDrawer;
   
-  // Make sure we only look for 'open' or 'unpaid' depending on your team's schema
   openBills = computed(() => this.store.bills().filter(b => b.status === 'open' || (b.status as any) === 'unpaid'));
 
   private highlighted = toSignal(
@@ -54,6 +53,11 @@ export class BillSettlement implements OnInit, OnDestroy {
   
   qrCodeImage = signal<string | null>(null);
   testUrl = signal<string | null>(null); 
+
+  // Discount Modal Signals
+  showDiscountModal = signal(false);
+  discountType = signal<DiscountType>('senior');
+  discountIdNumber = signal('');
 
   tenderedNum = computed(() => parseFloat(this.tendered()) || 0);
   change = computed(() => {
@@ -83,7 +87,6 @@ export class BillSettlement implements OnInit, OnDestroy {
     });
   }
 
-  // ─── Auto-Refresh & Notifications ──────────────────────────────────────────
   ngOnInit() {
     this.previousBillCount = this.openBills().length;
 
@@ -92,7 +95,6 @@ export class BillSettlement implements OnInit, OnDestroy {
       
       const currentCount = this.openBills().length;
 
-      // If the list got bigger, a new bill appeared!
       if (currentCount > this.previousBillCount) {
         const difference = currentCount - this.previousBillCount;
         this.notif.show(`New bill(s) requested! (${difference})`, 'info');
@@ -128,12 +130,39 @@ export class BillSettlement implements OnInit, OnDestroy {
     this.tendered.set(String(amt));
   }
 
-  goToDiscount(billId: string) {
-    this.router.navigate(['/cashier/discount'], { queryParams: { bill: billId } });
-  }
-
   addMoreItems(billId: string) {
     this.router.navigate(['/cashier/pos'], { queryParams: { addToOrder: billId } });
+  }
+
+  openDiscountModal() {
+    this.discountType.set('senior');
+    this.discountIdNumber.set('');
+    this.showDiscountModal.set(true);
+  }
+
+  closeDiscountModal() {
+    this.showDiscountModal.set(false);
+  }
+
+  async applyDiscount() {
+    const sel = this.selected();
+    if (!sel || !this.discountIdNumber()) return;
+
+    this.saving.set(true);
+    try {
+      await this.store.applyDiscount(sel.id, {
+        type: this.discountType(),
+        percent: 20,
+        idNumber: this.discountIdNumber(),
+      });
+      this.notif.show('Discount applied successfully!', 'success');
+      this.closeDiscountModal();
+    } catch (e) {
+      console.error(e);
+      this.settleError.set('Could not apply discount.');
+    } finally {
+      this.saving.set(false);
+    }
   }
 
   onMainAction() {
@@ -141,7 +170,6 @@ export class BillSettlement implements OnInit, OnDestroy {
     else this.handleCashSettle();
   }
 
-  // ─── Cash Payment ────────────────────────────────────────────────────────
   async handleCashSettle() {
     const sel = this.selected();
     if (!sel || !this.canSettle() || this.saving()) return;
@@ -161,7 +189,6 @@ export class BillSettlement implements OnInit, OnDestroy {
     }
   }
 
-  // ─── Digital (QR) Payment ────────────────────────────────────────────────
   async handleDigitalPayment() {
     const sel = this.selected();
     if (!sel || this.saving()) return;
