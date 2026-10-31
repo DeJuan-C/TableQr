@@ -13,7 +13,6 @@ export class CashierLayout {
   nav = [
     { path: '/cashier/pos', label: 'POS Terminal', icon: '🖥' },
     { path: '/cashier/bills', label: 'Bills & Drawer', icon: '💵' },
-    { path: '/cashier/discount', label: 'Discounts', icon: '🏷' },
     { path: '/cashier/receipts', label: 'Receipts', icon: '🧾' },
     { path: '/cashier/closing', label: 'Day Close', icon: '🔒' },
   ];

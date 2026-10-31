@@ -35,6 +35,7 @@ export class BillSettlement implements OnInit, OnDestroy {
   paymentMode = signal<'cash' | 'qr'>('cash');
   drawer = this.store.cashDrawer;
   
+  // Accept both 'open' and 'unpaid'
   openBills = computed(() => this.store.bills().filter(b => b.status === 'open' || (b.status as any) === 'unpaid'));
 
   private highlighted = toSignal(
@@ -54,7 +55,7 @@ export class BillSettlement implements OnInit, OnDestroy {
   qrCodeImage = signal<string | null>(null);
   testUrl = signal<string | null>(null); 
 
-  // Discount Modal Signals
+  // Discount Modal States
   showDiscountModal = signal(false);
   discountType = signal<DiscountType>('senior');
   discountIdNumber = signal('');
@@ -130,6 +131,15 @@ export class BillSettlement implements OnInit, OnDestroy {
     this.tendered.set(String(amt));
   }
 
+  appendNumber(num: string) {
+    const current = this.tendered();
+    this.tendered.set(current === '0' ? num : current + num);
+  }
+
+  clearTendered() {
+    this.tendered.set('');
+  }
+
   addMoreItems(billId: string) {
     this.router.navigate(['/cashier/pos'], { queryParams: { addToOrder: billId } });
   }
@@ -160,6 +170,23 @@ export class BillSettlement implements OnInit, OnDestroy {
     } catch (e) {
       console.error(e);
       this.settleError.set('Could not apply discount.');
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+    async removeDiscount() {
+    const sel = this.selected();
+    if (!sel) return;
+
+    this.saving.set(true);
+    try {
+      // This calls the store, which updates the database and reloads the bills
+      await this.store.removeDiscount(sel.id);
+      this.notif.show('Discount removed successfully.', 'info');
+    } catch (e) {
+      console.error(e);
+      this.settleError.set('Could not remove discount.');
     } finally {
       this.saving.set(false);
     }

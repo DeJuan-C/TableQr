@@ -183,8 +183,12 @@ export class CashierStore {
 
       const subtotal = Number(r.subtotal || 0);
       const discountAmount = Number(billData?.discount_amount || 0);
-      const serviceCharge = Math.round(subtotal * 0.05);
-      const dbTotal = Number(billData?.total_amount || (subtotal + serviceCharge));
+      
+      // Calculate service charge based on discounted amount
+      const taxBase = subtotal - discountAmount;
+      const serviceCharge = Math.round(taxBase * 0.05);
+      
+      const dbTotal = Number(billData?.total_amount || (taxBase + serviceCharge));
 
       return {
         id: r.order_id,
@@ -246,9 +250,11 @@ export class CashierStore {
       const dbSubtotal = Number(orderData?.subtotal || 0);
       const discountAmount = Number(billData?.discount_amount || 0);
       
+      // FIX: Calculate service charge based on the discounted amount
       const foodPrice = dbSubtotal; 
-      const serviceCharge = Math.round(foodPrice * 0.05);
-      const finalTotal = foodPrice + serviceCharge - discountAmount;
+      const taxBase = foodPrice - discountAmount;
+      const serviceCharge = Math.round(taxBase * 0.05);
+      const finalTotal = taxBase + serviceCharge;
 
       const paidDate = r.paid_at ? new Date(r.paid_at) : new Date(orderData?.created_at || new Date());
 
@@ -260,7 +266,17 @@ export class CashierStore {
         items: items, 
         subtotal: foodPrice,         
         serviceCharge: serviceCharge, 
-        discountAmount: discountAmount, 
+        discountAmount: discountAmount,
+        
+        // Pass the discount object to the receipt
+        discount: discountAmount > 0 ? {
+          type: 'senior', 
+          label: 'Discount', 
+          percent: 20, 
+          appliedAt: new Date(), 
+          appliedBy: 'Cashier'
+        } : undefined,
+
         total: finalTotal,           
         amountTendered: finalTotal, 
         change: 0, 
@@ -559,6 +575,7 @@ export class CashierStore {
     const expected = summary.expectedDrawer;
     const discrepancy = actualCash - expected;
 
+    // 1. Save to Supabase
     const { data, error } = await this.sb.from('day_closings').insert({
       business_date: dateStr,
       total_transactions: summary.todayTxns.length,
@@ -581,6 +598,7 @@ export class CashierStore {
       throw error;
     }
 
+    // 2. Return the formatted result to the UI
     const closing: DayClosing = {
       businessDate: dateStr,
       totalTransactions: summary.todayTxns.length,
@@ -599,6 +617,7 @@ export class CashierStore {
       closedAt: new Date(),
     };
 
+    // 3. Add to local state
     this.closings.update(prev => [closing, ...prev]);
     return closing;
   }

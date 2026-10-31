@@ -4,6 +4,7 @@ import { CashierLayout } from '../../../components/cashier-layout/cashier-layout
 import { MiniCalendar } from '../../../components/mini-calendar/mini-calendar';
 import { ReceiptView } from '../../../components/receipt-view/receipt-view';
 import { CashierStore, type Transaction } from '../../../store/cashier-store';
+import { NotificationStore } from '../../../store/notification-store'; // Added
 
 @Component({
   selector: 'app-receipts',
@@ -12,8 +13,10 @@ import { CashierStore, type Transaction } from '../../../store/cashier-store';
 })
 export class Receipts implements OnInit, OnDestroy {
   private store = inject(CashierStore);
+  private notif = inject(NotificationStore); // Added
   
-  private refreshInterval: any; // NEW: Holds the timer
+  private refreshInterval: any; // Added
+  private previousTxnCount = 0; // Added
 
   search = signal('');
   selectedId = signal<string | null>(null);
@@ -49,14 +52,24 @@ export class Receipts implements OnInit, OnDestroy {
     });
   });
 
-  // NEW: Start refreshing receipts every 5 seconds
+  // ADDED: Polling logic
   ngOnInit() {
+    this.previousTxnCount = this.allTxns().length;
+
     this.refreshInterval = setInterval(async () => {
       await this.store.loadTransactions();
-    }, 5000);
+      
+      const currentCount = this.allTxns().length;
+
+      // If a new receipt was added, show a notification
+      if (currentCount > this.previousTxnCount) {
+        this.notif.show('New payment received!', 'success');
+      }
+      
+      this.previousTxnCount = currentCount;
+    }, 1000); // Refresh every 5 seconds
   }
 
-  // NEW: Clear the timer when leaving the page
   ngOnDestroy() {
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
