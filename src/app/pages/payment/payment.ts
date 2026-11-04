@@ -3,7 +3,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 import { CartService } from '../..//services/cart.service';
-import { PaymentService, type DbBill } from '../..//services/payment.service';
+import { PaymentService, type DbBill, type DiscountInfo } from '../..//services/payment.service';
+import { CardScanner, type ScannedData } from '../../components/card-scanner/card-scanner';
 
 type Method = 'gcash' | 'maya' | 'cash' | null;
 type PayState = 'select' | 'confirming' | 'done' | 'cash-pending';
@@ -12,6 +13,7 @@ const POLL_MS = 3000;
 
 @Component({
   selector: 'app-payment',
+   imports: [CardScanner],
   templateUrl: './payment.html',
 })
 export class Payment {
@@ -43,6 +45,13 @@ export class Payment {
 
   method = signal<Method>(null);
   payState = signal<PayState>('select');
+    // --- Senior / PWD discount (auto-apply, walang verification) ---
+  discount = signal<DiscountInfo>({ status: 'none', type: null, discountAmount: 0 });
+  discountOpen = signal(false);
+  discountType = signal<'senior' | 'pwd'>('senior');
+  discountScan = signal<ScannedData | null>(null);
+  discountBusy = signal(false);
+  discountMsg = signal<string | null>(null);
 
   methodLabel = computed(() => (this.method() === 'gcash' ? 'GCash' : this.method() === 'maya' ? 'Maya' : 'Cash'));
 
@@ -82,6 +91,7 @@ export class Payment {
     try {
       if (!this.cart.order()) await this.cart.loadLatest(id);
       await this.refreshBill();
+      await this.refreshDiscount(); 
     } catch (e) {
       this.errorMsg.set(this.friendly(e));
     } finally {
@@ -153,7 +163,72 @@ export class Payment {
       /* ignore */
     }
   }
+  // ─── Senior / PWD discount ─────────────────────────────────────────────────
 
+  async refreshDiscount() {
+    const id = this.id();
+    if (!id) return;
+    try {
+      this.discount.set(await this.pay.getDiscount(id));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  toggleDiscountForm() {
+    this.discountMsg.set(null);
+    this.discountScan.set(null);
+    this.discountOpen.update(v => !v);
+  }
+
+  setDiscountType(t: 'senior' | 'pwd') {
+    this.discountType.set(t);
+    this.discountScan.set(null);
+  }
+
+  onDiscountScan(data: ScannedData) {
+    this.discountScan.set(data);
+  }
+
+  onDiscountMismatch(detected: 'senior' | 'pwd') {
+    if (detected !== this.discountType()) this.discountType.set(detected);
+  }
+
+  async applyDiscount() {
+    const id = this.id();
+    const s = this.discountScan();
+    if (!id || !s || !s.name || !s.idNumber || this.discountBusy()) return;
+
+    this.discountBusy.set(true);
+    this.discountMsg.set(null);
+    try {
+      await this.pay.applyDiscount(id, {
+        type: this.discountType(),
+        name: s.name,
+        idNumber: s.idNumber,
+        cardData: s.extra,
+      });
+      this.discountOpen.set(false);
+      this.discountScan.set(null);
+      await this.refreshBill(); // kunin ang bagong total
+      await this.refreshDiscount();
+      this.discountMsg.set('Na-apply na ang discount. Ito na ang bagong total.');
+    } catch (e) {
+      this.discountMsg.set(this.discountFriendly(e));
+    } finally {
+      this.discountBusy.set(false);
+    }
+  }
+
+  private discountFriendly(e: unknown): string {
+    const msg = e instanceof Error ? e.message : '';
+    if (msg.includes('Invalid session')) return 'Expired o hindi valid ang QR session ng mesa. I-scan ulit ang QR code.';
+    if (msg.includes('Already discounted')) return 'May discount na ang bill na ito.';
+    if (msg.includes('Payment started')) return 'May payment nang na-submit, kaya hindi na pwedeng magdagdag ng discount.';
+    if (msg.includes('No bill')) return 'Walang bill na pwedeng lagyan ng discount.';
+    if (msg.includes('Missing ID')) return 'Hindi nabasa ang pangalan o ID number. I-scan ulit ang ID.';
+    return 'Hindi na-apply ang discount. Subukan ulit.';
+  }
   goToMenu() {
     this.router.navigate(['/table', this.tableId(), 'menu']);
   }

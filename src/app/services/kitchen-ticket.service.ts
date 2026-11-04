@@ -105,7 +105,7 @@ export class KitchenTicketService {
         .from('ticket')
         .select(
           `ticket_id, submission_timestamp, current_stage,
-           orders ( order_type, tables ( table_number ) ),
+           orders ( order_type,order_source, tables ( table_number ) ),
            ticket_item ( quantity, menu ( menu_name, menu_category ) ),
            stage_transition ( changed_at )`,
         )
@@ -144,9 +144,10 @@ export class KitchenTicketService {
       );
       const stageChangedAt = new Date(Math.max(submittedAt.getTime(), ...changes));
 
-      const source: TicketSource = /pos|counter|walk|take/i.test(order?.order_type ?? '')
-        ? 'POS'
-        : 'QR';
+        const source: TicketSource =
+        order?.order_source === 'pos' || /pos|counter|walk|take/i.test(order?.order_type ?? '')
+          ? 'POS'
+          : 'QR';
 
       return {
         id: `TKT-${String(row.ticket_id).padStart(3, '0')}`,

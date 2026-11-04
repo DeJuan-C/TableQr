@@ -357,6 +357,7 @@ export class CashierStore {
       .insert({
         order_type: orderType,
         order_status: 'pending',
+        order_source: 'pos',
         subtotal,
         table_id: orderType === 'take-out' ? 1 : (tableLabel ? Number(tableLabel.replace(/\D/g, '')) : 1),
       })

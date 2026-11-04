@@ -20,7 +20,7 @@
         <p class="panel-hint">Select an incoming multi-item order to calculate its fire sequence.</p>
         <div class="ticket-list">
           <button *ngFor="let ticket of activeTickets()" type="button" class="ticket-select" [class.selected]="selectedTicket()?.id === ticket.id" (click)="selectTicket(ticket.id)">
-            <span class="ticket-select-top"><b>{{ ticket.id }}</b><span>{{ elapsedMinutes(ticket) }} min ago</span></span>
+            <span class="ticket-select-top"><b>{{ ticket.id }}</b><span>{{ elapsedLabel(ticket) }}</span></span>
             <strong>{{ ticket.location }}</strong>
             <span class="ticket-select-bottom"><span>{{ ticket.items.length }} items</span><i>·</i><span>Serve {{ formatTime(ticket.targetServeAt) }}</span></span>
           </button>

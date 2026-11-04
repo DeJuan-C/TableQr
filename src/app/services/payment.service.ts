@@ -13,12 +13,18 @@ export interface DbBill {
   billRequested: boolean;
   payment: { method: string; reference: string | null; status: string } | null;
 }
-
+export interface DiscountInfo {
+  status: 'none' | 'approved';
+  type: 'senior' | 'pwd' | null;
+  discountAmount: number;
+}
 @Injectable({ providedIn: 'root' })
+
 export class PaymentService {
   private token(tableId: string) {
     return sessionStorage.getItem(OrderService.tokenKey(tableId)) ?? '';
   }
+  
 
   async getBill(tableId: string): Promise<DbBill | null> {
     const { data, error } = await supabase.rpc('get_bill', {
@@ -78,6 +84,35 @@ export class PaymentService {
       p_method: 'cash',
       p_reference: null,
       p_proof: null,
+    });
+    if (error) throw new Error(error.message);
+  }
+    /** Status ng Senior/PWD discount ng bill ng mesa. */
+  async getDiscount(tableId: string): Promise<DiscountInfo> {
+    const { data, error } = await supabase.rpc('get_discount_request', {
+      p_table_id: OrderService.tableNumber(tableId),
+      p_token: this.token(tableId),
+    });
+    if (error) throw new Error(error.message);
+    return {
+      status: data?.status === 'approved' ? 'approved' : 'none',
+      type: data?.type ?? null,
+      discountAmount: Number(data?.discountAmount ?? 0),
+    };
+  }
+
+  /** I-apply agad ang Senior/PWD discount sa bill (walang verification ng cashier). */
+  async applyDiscount(
+    tableId: string,
+    input: { type: 'senior' | 'pwd'; name: string; idNumber: string; cardData?: string },
+  ): Promise<void> {
+    const { error } = await supabase.rpc('apply_discount_self', {
+      p_table_id: OrderService.tableNumber(tableId),
+      p_token: this.token(tableId),
+      p_type: input.type,
+      p_name: input.name,
+      p_id_number: input.idNumber,
+      p_card_data: input.cardData ?? null,
     });
     if (error) throw new Error(error.message);
   }

@@ -131,6 +131,7 @@
                   </div>
                 </div>
                 <p class="text-xs italic" style="color: #C4A882; font-family: Lato">{{ s.extra }}</p>
+                <p class="text-[11px] italic" style="color: #9B7B5A; font-family: Lato">Pakisuri ang pangalan at ID number. Pindutin ang Edit kung may mali.</p>
               }
             </div>
           </div>
@@ -198,6 +199,12 @@
               class="w-full py-2.5 text-sm font-bold rounded transition-all hover:opacity-90"
               style="background: #C0392B; color: #FFF8EE; font-family: 'Playfair Display', serif">
               Scan a different card
+            </button>
+              <button
+              (click)="manualEntry()"
+              class="w-full py-2.5 mb-2 text-sm font-bold rounded border transition-all hover:opacity-90"
+              style="border-color: #7A3B1E; color: #7A3B1E; font-family: 'Playfair Display', serif">
+              I-type o itama ang detalye
             </button>
           </div>
         </div>

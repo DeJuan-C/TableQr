@@ -93,14 +93,19 @@
         }
         <div class="border-t pt-2 space-y-1" style="border-color: #E8D5B0;">
           <div class="flex justify-between text-xs" style="color: #9B7B5A;">
-            <span>Subtotal</span><span>₱{{ subtotal().toLocaleString() }}</span>
+            <span>Subtotal</span><span>₱{{ subtotalShown().toLocaleString() }}</span>
           </div>
+                    @if (hasDiscount()) {
+            <div class="flex justify-between text-xs" style="color: #4A7C59;">
+              <span>Senior/PWD Discount (20%)</span><span>−₱{{ discountAmount().toLocaleString() }}</span>
+            </div>
+          }
           <div class="flex justify-between text-xs" style="color: #9B7B5A;">
-            <span>Service Charge (5%)</span><span>₱{{ serviceCharge().toLocaleString() }}</span>
+            <span>Service Charge (5%)</span><span>₱{{ serviceShown().toLocaleString() }}</span>
           </div>
           <div class="flex justify-between font-bold text-base mt-2 pt-1 border-t" style="font-family: 'Playfair Display', serif; color: #2C1810; border-color: #C4A882;">
             <span>{{ payLabel() }}</span>
-            <span style="color: #7A3B1E;">₱{{ o.total.toLocaleString() }}</span>
+            <span style="color: #7A3B1E;">₱{{ totalShown().toLocaleString() }}</span>
           </div>
         </div>
       </div>
@@ -108,7 +113,7 @@
 
     @if (o.status === 'served') {
       <button
-        (click)="downloadReceipt()"
+        (click)="downloadReceiptPdf()"
         class="w-full py-3 mb-4 rounded text-sm font-bold transition-all hover:opacity-90"
         style="background: linear-gradient(135deg, #5C2E0A, #7A3B1E); color: #FFF8EE; font-family: 'Playfair Display', serif;"
       >

@@ -81,8 +81,8 @@
           </svg>
           {{ ticket.source }}
         </span>
-        <span class="fire-countdown" *ngIf="ticket.stage === 'Pending' || ticket.stage === 'Preparing'">
-          {{ ticketService.formatCountdown(ticket.fireInSeconds) }}
+          <span class="fire-countdown" *ngIf="ticket.stage === 'Pending' || ticket.stage === 'Preparing'">
+          {{ ticket.fireInSeconds > 0 ? ticketService.formatCountdown(ticket.fireInSeconds) + ' left' : 'Overdue' }}
         </span>
       </div>
 

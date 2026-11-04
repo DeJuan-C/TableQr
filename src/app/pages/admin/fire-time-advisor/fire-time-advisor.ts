@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { Module7ActiveTicket, Module7FireRecommendation } from '../../../core/models/module7-ticket.model';
 import { Module7TicketService } from '../../../services/module7-ticket.service';
 
@@ -13,7 +13,11 @@ export class FireTimeAdvisor {
   readonly ticketService = inject(Module7TicketService);
   readonly clock = signal(new Date());
   readonly selectedTicket = this.ticketService.selectedTicket;
-  readonly activeTickets = this.ticketService.activeTickets;
+  readonly activeTickets = computed(() =>
+  [...this.ticketService.activeTickets()].sort(
+    (a, b) => b.receivedAt.getTime() - a.receivedAt.getTime() // pinakabago muna; ilagay ang a - b para pinakamatanda muna
+  )
+);
   readonly recommendations = this.ticketService.recommendations;
   readonly summary = this.ticketService.summary;
   readonly complianceLog = this.ticketService.complianceLog;
@@ -43,6 +47,20 @@ export class FireTimeAdvisor {
 
   elapsedMinutes(ticket: Module7ActiveTicket): number {
     return Math.max(0, Math.floor((this.clock().getTime() - ticket.receivedAt.getTime()) / 60_000));
+  }
+    /** 3 min ago / 1 hr 37 min ago / 4 days 11 hrs ago */
+  elapsedLabel(ticket: Module7ActiveTicket): string {
+    const m = this.elapsedMinutes(ticket);
+    if (m < 1) return 'Just now';
+    if (m < 60) return `${m} min ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) {
+      const rm = m % 60;
+      return rm ? `${h} hr ${rm} min ago` : `${h} hr ago`;
+    }
+    const d = Math.floor(h / 24);
+    const rh = h % 24;
+    return rh ? `${d} ${d === 1 ? 'day' : 'days'} ${rh} hr ago` : `${d} ${d === 1 ? 'day' : 'days'} ago`;
   }
 
   formatTime(date: Date): string {

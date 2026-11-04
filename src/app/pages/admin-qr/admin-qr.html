@@ -1,12 +1,96 @@
 <div class="fade-up">
-  <div class="mb-8">
-    <h2 class="text-3xl" style="font-family: 'Playfair Display', serif; color: #2C1810; font-weight: 700;">
-      Table QR Management
-    </h2>
-    <p class="text-sm mt-1" style="color: #9B7B5A;">
-      Generate and manage encrypted QR codes for each dining table. Each code links customers directly to their table's ordering session.
-    </p>
+  <div class="mb-8 flex items-start justify-between gap-4 flex-wrap">
+    <div>
+      <h2 class="text-3xl" style="font-family: 'Playfair Display', serif; color: #2C1810; font-weight: 700;">
+        Table QR Management
+      </h2>
+      <p class="text-sm mt-1" style="color: #9B7B5A;">
+        Generate and manage encrypted QR codes for each dining table. Each code links customers directly to their table's ordering session.
+      </p>
+    </div>
+    <button
+      (click)="printAll()"
+      class="text-sm px-4 py-2 rounded border transition-colors"
+      style="border-color: #C4A882; color: #5C2E0A; font-family: 'Lato', sans-serif; font-weight: 700;"
+    >
+      🖨 Print all active QR
+    </button>
   </div>
+
+  <!-- Modal (pamalit sa alert/confirm) -->
+  @if (modal(); as m) {
+    <div
+      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style="background: rgba(44, 24, 16, 0.55);"
+      (click)="closeModal()"
+    >
+      <div
+        class="w-full max-w-sm rounded border shadow-xl"
+        style="background: #FFF8EE; border-color: #C4A882;"
+        role="dialog"
+        aria-modal="true"
+        (click)="$event.stopPropagation()"
+      >
+        <div class="px-5 pt-5 pb-3">
+          <h3 class="text-lg font-bold" style="font-family: 'Playfair Display', serif; color: #2C1810;">
+            {{ m.title }}
+          </h3>
+          <p class="text-sm mt-2" style="color: #5C2E0A; font-family: 'Lato', sans-serif;">{{ m.message }}</p>
+          @if (m.detail) {
+            <p class="text-xs mt-2 px-3 py-2 rounded" style="background: #F4ECD8; color: #8A5A12; border: 1px solid #E8D5B0; font-family: monospace;">
+              {{ m.detail }}
+            </p>
+          }
+        </div>
+        <div class="px-5 pb-5 pt-2 flex gap-2 justify-end">
+          @if (m.confirmLabel) {
+            <button (click)="closeModal()" class="text-sm px-4 py-2 rounded border" style="border-color: #C4A882; color: #5C2E0A; font-family: 'Lato', sans-serif;">
+              Cancel
+            </button>
+            <button
+              (click)="confirmModal()"
+              class="text-sm px-4 py-2 rounded"
+              [style.background]="m.danger ? '#B42318' : '#7A3B1E'"
+              style="color: #FFF8EE; font-family: 'Lato', sans-serif; font-weight: 700;"
+            >
+              {{ m.confirmLabel }}
+            </button>
+          } @else {
+            <button (click)="closeModal()" class="text-sm px-4 py-2 rounded" style="background: #7A3B1E; color: #FFF8EE; font-family: 'Lato', sans-serif; font-weight: 700;">
+              OK
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (toast()) {
+    <div class="fixed bottom-6 right-6 z-50 px-4 py-2 rounded shadow text-sm" style="background: #2C1810; color: #FFF8EE;">
+      {{ toast() }}
+    </div>
+  }
+
+  <!-- Staff alerts: customer na nag-scan ng expired QR -->
+  @if (requests().length) {
+    <div class="mb-6 rounded border" style="background: #FEF3C7; border-color: #E0B44C;">
+      <p class="px-4 py-2 text-xs font-bold tracking-widest uppercase" style="color: #8A5A12;">
+        Humihingi ng bagong session ({{ requests().length }})
+      </p>
+      @for (req of requests(); track req.request_id) {
+        <div class="px-4 py-2 flex items-center justify-between gap-3 border-t" style="border-color: #E8D5B0;">
+          <span class="text-sm" style="color: #2C1810;">
+            <strong>{{ labelOfTable(req.table_id) }}</strong>
+            <span class="text-xs" style="color: #8A5A12;"> &bull; nag-scan pero tapos na ang session, {{ formatTime(toDate(req.requested_at)) }}</span>
+          </span>
+          <span class="flex gap-2">
+            <button (click)="issueForRequest(req)" class="text-xs px-3 py-1 rounded" style="background: #7A3B1E; color: #FFF8EE;">Issue new session</button>
+            <button (click)="dismissRequest(req)" class="text-xs px-3 py-1 rounded border" style="border-color: #C4A882; color: #5C2E0A;">Dismiss</button>
+          </span>
+        </div>
+      }
+    </div>
+  }
 
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
     <!-- Table list -->
@@ -24,16 +108,28 @@
         </div>
 
         @if (showAddForm()) {
-        <div class="px-4 py-3 border-b" style="border-color: #E8D5B0; background: #F4ECD8;">
-          <p class="text-sm" style="color: #2C1810; font-family: 'Lato', sans-serif;">
-            Gagawa ng bagong table: <strong>{{ nextLabel() }}</strong>
-          </p>
-          <div class="flex gap-2 mt-2">
-            <button (click)="addTable()" class="flex-1 text-xs py-1.5 rounded" style="background: #7A3B1E; color: #FFF8EE;">Create</button>
-            <button (click)="showAddForm.set(false)" class="flex-1 text-xs py-1.5 rounded" style="background: #E8D5B0; color: #2C1810;">Cancel</button>
+          <div class="px-4 py-3 border-b" style="border-color: #E8D5B0; background: #F4ECD8;">
+            <p class="text-sm" style="color: #2C1810; font-family: 'Lato', sans-serif;">
+              Susunod na table: <strong>{{ nextLabel() }}</strong>
+            </p>
+            <label class="flex items-center gap-2 mt-2 text-xs" style="color: #5C2E0A;">
+              Ilan ang gagawin (1-20):
+              <input
+                type="number"
+                min="1"
+                max="20"
+                [ngModel]="bulkCount()"
+                (ngModelChange)="bulkCount.set($event)"
+                class="w-16 px-2 py-1 rounded border text-sm"
+                style="border-color: #C4A882; background: #FFF8EE; color: #2C1810;"
+              />
+            </label>
+            <div class="flex gap-2 mt-2">
+              <button (click)="addMany()" class="flex-1 text-xs py-1.5 rounded" style="background: #7A3B1E; color: #FFF8EE;">Create</button>
+              <button (click)="showAddForm.set(false)" class="flex-1 text-xs py-1.5 rounded" style="background: #E8D5B0; color: #2C1810;">Cancel</button>
+            </div>
           </div>
-        </div>
-}
+        }
 
         <div class="divide-y" style="border-color: #E8D5B0;">
           @for (table of tables(); track table.id) {
@@ -44,15 +140,33 @@
             >
               <div>
                 <span class="font-bold text-sm block" style="color: #2C1810; font-family: 'Playfair Display', serif;">{{ table.label }}</span>
-                <span class="text-xs" style="color: #9B7B5A;">Expires {{ formatTime(table.expiresAt) }}</span>
+                <span class="text-xs" style="color: #9B7B5A;">
+                  Expires {{ formatTime(table.expiresAt) }} &bull;
+                  <span
+                    [style.color]="expiryState(table) === 'expired' ? '#9B7B5A' : expiryState(table) === 'soon' ? '#B7791F' : '#9B7B5A'"
+                    [style.font-weight]="expiryState(table) === 'ok' ? '400' : '700'"
+                  >{{ timeLeft(table) }}</span>
+                </span>
               </div>
-              <span
-                class="text-xs px-2 py-0.5 rounded-full"
-                [style.background]="table.active ? '#4A7C5920' : '#7A3B1E20'"
-                [style.color]="table.active ? '#4A7C59' : '#7A3B1E'"
-              >
-                {{ table.active ? 'Active' : 'Inactive' }}
-              </span>
+              <div class="flex flex-col items-end gap-1">
+                <span
+                  class="text-xs px-2 py-0.5 rounded-full"
+                  [style.background]="table.active ? '#4A7C5920' : '#7A3B1E20'"
+                  [style.color]="table.active ? '#4A7C59' : '#7A3B1E'"
+                >
+                  {{ table.active ? 'Active' : 'Inactive' }}
+                </span>
+                @if (billsOf(table.id) > 0) {
+                  <span class="text-xs px-2 py-0.5 rounded-full" style="background: #B7791F25; color: #8A5A12;">
+                    In use &bull; {{ billsOf(table.id) }} unpaid
+                  </span>
+                }
+                @if (billAsked(table.id)) {
+                  <span class="text-xs px-2 py-0.5 rounded-full" style="background: #B4231825; color: #B42318;">
+                    Bill requested
+                  </span>
+                }
+              </div>
             </button>
           }
         </div>
@@ -68,9 +182,15 @@
               {{ selected.label }}
             </h3>
             <p class="text-xs mt-0.5" style="color: #9B7B5A;">
-              Session ID: {{ selected.id }} &bull; Token expires at {{ formatTime(selected.expiresAt) }}
+              Session ID: {{ selected.id }} &bull; Token expires at {{ formatTime(selected.expiresAt) }} ({{ timeLeft(selected) }})
             </p>
           </div>
+
+          @if (billsOf(selected.id) > 0) {
+            <div class="px-6 py-2 text-xs border-b" style="background: #FEF3C7; color: #8A5A12; border-color: #E8D5B0;">
+              May {{ billsOf(selected.id) }} unpaid bill ang mesang ito. Mag-ingat sa Regenerate o Deactivate.
+            </div>
+          }
 
           <div class="p-6">
             <div class="flex flex-col md:flex-row gap-8 items-start">
@@ -95,14 +215,30 @@
                   <span class="text-xs font-bold tracking-widest uppercase block mb-1" style="color: #9B7B5A;">Encrypted Token</span>
                   <div class="flex items-center gap-2">
                     <code class="text-xs px-3 py-2 rounded font-mono flex-1 overflow-x-auto" style="background: #F4ECD8; color: #5C2E0A; border: 1px solid #C4A882;">{{ selected.token }}</code>
+                    <button
+                      (click)="copy(selected.token, 'Token')"
+                      class="text-xs px-3 py-2 rounded border transition-all duration-200 min-w-[76px]"
+                      [style.border-color]="copiedKey() === 'Token' ? '#4A7C59' : '#C4A882'"
+                      [style.color]="copiedKey() === 'Token' ? '#FFF8EE' : '#5C2E0A'"
+                      [style.background]="copiedKey() === 'Token' ? '#4A7C59' : 'transparent'"
+                    >{{ copiedKey() === 'Token' ? '✓ Copied' : 'Copy' }}</button>
                   </div>
                 </div>
 
                 <div>
                   <span class="text-xs font-bold tracking-widest uppercase block mb-1" style="color: #9B7B5A;">Session URL</span>
-                  <p class="text-xs break-all px-3 py-2 rounded" style="background: #F4ECD8; color: #5C2E0A; border: 1px solid #C4A882; font-family: monospace;">
-                    {{ selectedUrl() }}
-                  </p>
+                  <div class="flex items-start gap-2">
+                    <p class="text-xs break-all px-3 py-2 rounded flex-1" style="background: #F4ECD8; color: #5C2E0A; border: 1px solid #C4A882; font-family: monospace;">
+                      {{ selectedUrl() }}
+                    </p>
+                    <button
+                      (click)="copy(selectedUrl(), 'URL')"
+                      class="text-xs px-3 py-2 rounded border transition-all duration-200 min-w-[76px]"
+                      [style.border-color]="copiedKey() === 'URL' ? '#4A7C59' : '#C4A882'"
+                      [style.color]="copiedKey() === 'URL' ? '#FFF8EE' : '#5C2E0A'"
+                      [style.background]="copiedKey() === 'URL' ? '#4A7C59' : 'transparent'"
+                    >{{ copiedKey() === 'URL' ? '✓ Copied' : 'Copy' }}</button>
+                  </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3 pt-2">
@@ -120,7 +256,7 @@
                   </div>
                 </div>
 
-                <div class="flex gap-2 pt-2">
+                <div class="flex flex-wrap gap-2 pt-2">
                   <button
                     (click)="regenerateToken(selected.id)"
                     class="flex-1 py-2 text-sm rounded transition-colors hover:opacity-90"
@@ -136,7 +272,24 @@
                     {{ selected.active ? 'Deactivate' : 'Activate' }}
                   </button>
                   <button
-                    (click)="print()"
+                    (click)="closeSession(selected.id)"
+                    title="Isara ang kasalukuyang session"
+                    class="py-2 px-4 text-sm rounded border transition-colors"
+                    style="border-color: #C4A882; color: #5C2E0A; font-family: 'Lato', sans-serif;"
+                  >
+                    Close session
+                  </button>
+                  <button
+                    (click)="downloadPng()"
+                    title="Download PNG"
+                    class="py-2 px-4 text-sm rounded border transition-colors"
+                    style="border-color: #C4A882; color: #5C2E0A; font-family: 'Lato', sans-serif;"
+                  >
+                    ⬇ PNG
+                  </button>
+                  <button
+                    (click)="printSelected()"
+                    title="Print this QR"
                     class="py-2 px-4 text-sm rounded border transition-colors"
                     style="border-color: #C4A882; color: #5C2E0A; font-family: 'Lato', sans-serif;"
                   >
@@ -148,16 +301,7 @@
           </div>
         </div>
 
-        <!-- Security Note -->
-        <div class="mt-4 px-4 py-3 rounded border flex gap-3 items-start" style="background: #F4ECD8; border-color: #C4A882;">
-          <span class="text-lg leading-none mt-0.5">🔒</span>
-          <div>
-            <p class="text-xs font-bold" style="color: #5C2E0A;">Session Security</p>
-            <p class="text-xs mt-0.5" style="color: #9B7B5A;">
-              Each QR code contains a unique encrypted session token bound to this table. Tokens expire automatically after 4 hours or when manually regenerated. Scanning an expired QR will prompt the customer to request a new session from staff.
-            </p>
-          </div>
-        </div>
+        
       </div>
     }
   </div>
@@ -168,11 +312,22 @@
   </div>
 
   <!-- Summary grid -->
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
     @for (stat of stats(); track stat.label) {
       <div class="rounded border p-4 text-center" style="background: #FFF8EE; border-color: #C4A882;">
         <p class="text-2xl font-bold" style="font-family: 'Playfair Display', serif; color: #7A3B1E;">{{ stat.value }}</p>
         <p class="text-xs mt-1" style="color: #9B7B5A;">{{ stat.label }}</p>
+      </div>
+    }
+  </div>
+
+  <!-- Print sheet (hidden sa screen, lalabas lang kapag nag-print) -->
+  <div class="qr-print-sheet">
+    @for (item of sheet(); track item.label) {
+      <div class="qr-print-card">
+        <p class="qr-print-title">{{ item.label }}</p>
+        <img [src]="item.img" [alt]="'QR code for ' + item.label" />
+        <p class="qr-print-sub">Scan to order &bull; Kainan kay Aling Nene</p>
       </div>
     }
   </div>

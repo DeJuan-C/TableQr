@@ -127,7 +127,24 @@ export class OrderStatus {
   });
 
   serviceCharge = computed(() => Math.round(((this.order()?.total ?? 0) * 0.05) / 1.05));
-  subtotal = computed(() => (this.order()?.total ?? 0) - this.serviceCharge());
+    subtotal = computed(() => (this.order()?.total ?? 0) - this.serviceCharge());
+  // Senior/PWD discount: base sa items ng order, hindi sa order().total
+  itemsSubtotal = computed(() =>
+    (this.order()?.items ?? []).reduce((s, c) => s + c.item.price * c.qty, 0)
+  );
+  hasDiscount = computed(() => {
+    const b = this.bill();
+    const sub = this.itemsSubtotal();
+    return !!b && sub > 0 && b.total < sub + Math.round(sub * 0.05) - 0.5;
+  });
+  discountAmount = computed(() => (this.hasDiscount() ? Math.round(this.itemsSubtotal() * 0.2) : 0));
+  subtotalShown = computed(() => (this.hasDiscount() ? this.itemsSubtotal() : this.subtotal()));
+  serviceShown = computed(() =>
+    this.hasDiscount()
+      ? Math.round(this.bill()!.total - (this.itemsSubtotal() - this.discountAmount()))
+      : this.serviceCharge()
+  );
+  totalShown = computed(() => (this.hasDiscount() ? this.bill()!.total : this.order()?.total ?? 0));
 
   goToMenu() {
     this.router.navigate(['/table', this.tableId(), 'menu']);
@@ -144,6 +161,17 @@ export class OrderStatus {
       )
       .join('');
 
+      const sub = this.hasDiscount() ? this.itemsSubtotal() : this.subtotal();
+    const disc = this.discountAmount();
+    const svc = this.serviceShown();
+    const tot = this.totalShown();
+    const sm = 'border-top:none;font-size:12px;font-weight:normal;color:#9B7B5A;padding:2px 8px';
+    const summaryRows =
+      `<tr><td colspan="2" style="${sm}">Subtotal</td><td style="${sm};text-align:right">₱${sub.toLocaleString()}</td></tr>` +
+      (disc > 0
+        ? `<tr><td colspan="2" style="${sm}">Senior/PWD Discount (20%)</td><td style="${sm};text-align:right">−₱${disc.toLocaleString()}</td></tr>`
+        : '') +
+      `<tr><td colspan="2" style="${sm}">Service Charge (5%)</td><td style="${sm};text-align:right">₱${svc.toLocaleString()}</td></tr>`;
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${order.id}</title>
 <style>body{font-family:'Georgia',serif;max-width:320px;margin:40px auto;color:#2C1810;background:#FFF8EE;padding:24px}
 h1{font-size:18px;margin:0}p{margin:4px 0;font-size:12px;color:#9B7B5A}
@@ -158,7 +186,7 @@ tfoot td{border-top:1px solid #C4A882;font-weight:bold;font-size:15px;padding:8p
 <p><strong>Date:</strong> ${new Date().toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}</p>
 <table><thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Amount</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr><td colspan="2">Total</td><td style="text-align:right">₱${order.total.toLocaleString()}</td></tr></tfoot></table>
+<tfoot>${summaryRows}<tr><td colspan="2">Total</td><td style="text-align:right">₱${tot.toLocaleString()}</td></tr></tfoot></table>
 <div class="center"><p class="muted">Salamat at bumalik po kayo!</p><p class="muted">This is your official receipt.</p></div>
 </body></html>`;
 
@@ -169,5 +197,118 @@ tfoot td{border-top:1px solid #C4A882;font-weight:bold;font-size:15px;padding:8p
     a.download = `receipt-${order.id}.html`;
     a.click();
     URL.revokeObjectURL(url);
+
+  }
+       async downloadReceiptPdf() {
+    const order = this.order();
+    if (!order) return;
+
+    const { jsPDF } = await import('jspdf');
+
+    const ref = `KKAN-${String(order.orderId).padStart(6, '0')}`;
+    const sub = this.hasDiscount() ? this.itemsSubtotal() : this.subtotal();
+    const disc = this.discountAmount();
+    const svc = this.serviceShown();
+    const total = this.totalShown();
+    const pm = this.bill()?.payment?.method;
+    const methodLabel = pm === 'gcash' ? 'GCash' : pm === 'maya' ? 'Maya' : pm === 'cash' ? 'Cash' : '';
+
+    const W = 80;
+    const M = 6;
+    const money = (n: number) =>
+      'PHP ' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const probe = new jsPDF({ unit: 'mm', format: [W, 200] });
+    probe.setFontSize(9);
+    const nameLines = order.items.map(i => probe.splitTextToSize(`${i.qty}x ${i.item.name}`, W - M * 2 - 24) as string[]);
+    const itemsH = nameLines.reduce((s, l) => s + l.length * 4.5 + 1.5, 0);
+    const H = Math.max(110, 78 + itemsH + 30 + 18);
+
+    const doc = new jsPDF({ unit: 'mm', format: [W, H] });
+    const brown = [92, 46, 10] as const;
+    const muted = [155, 123, 90] as const;
+    let y = 12;
+
+    doc.setFont('times', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(...brown);
+    doc.text('Kainan Kay Aling Nene', W / 2, y, { align: 'center' });
+    y += 5;
+    doc.setFont('times', 'italic');
+    doc.setFontSize(8);
+    doc.setTextColor(...muted);
+    doc.text('Authentic Filipino Kitchen', W / 2, y, { align: 'center' });
+    y += 4;
+    doc.setDrawColor(196, 168, 130);
+    doc.line(M, y, W - M, y);
+    y += 6;
+
+    const meta: [string, string][] = [
+      ['Order', String(order.id)],
+      ['Table', String(this.tableId() ?? '')],
+      ['Ref', ref],
+      ...(methodLabel ? ([['Method', methodLabel]] as [string, string][]) : []),
+      ['Date', new Date().toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })],
+    ];
+    doc.setFontSize(8.5);
+    for (const [k, v] of meta) {
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...muted);
+      doc.text(k, M, y);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(44, 24, 16);
+      doc.text(v, W - M, y, { align: 'right' });
+      y += 4.5;
+    }
+
+    y += 1;
+    doc.line(M, y, W - M, y);
+    y += 5;
+
+    doc.setFontSize(9);
+    order.items.forEach((i, idx) => {
+      const lines = nameLines[idx];
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(44, 24, 16);
+      doc.text(lines, M, y);
+      doc.text(money(i.item.price * i.qty), W - M, y, { align: 'right' });
+      y += lines.length * 4.5 + 1.5;
+    });
+
+    doc.line(M, y, W - M, y);
+    y += 5;
+
+    const sumRow = (k: string, v: string, green = false) => {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(...muted);
+      doc.text(k, M, y);
+      if (green) doc.setTextColor(74, 124, 89);
+      else doc.setTextColor(44, 24, 16);
+      doc.text(v, W - M, y, { align: 'right' });
+      y += 4.5;
+    };
+    sumRow('Subtotal', money(sub));
+    if (disc > 0) sumRow('Senior/PWD Discount (20%)', '-' + money(disc), true);
+    sumRow('Service Charge (5%)', money(svc));
+
+    y += 2;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(...brown);
+    doc.text('Total (incl. 5% service)', M, y);
+    y += 5.5;
+    doc.setFontSize(13);
+    doc.text(money(total), W - M, y, { align: 'right' });
+
+    y += 12;
+    doc.setFont('times', 'italic');
+    doc.setFontSize(8);
+    doc.setTextColor(...muted);
+    doc.text('Salamat at bumalik po kayo!', W / 2, y, { align: 'center' });
+    y += 4;
+    doc.text('This is your official receipt.', W / 2, y, { align: 'center' });
+    doc.setDisplayMode('fullwidth');
+    doc.save(`receipt-${ref}.pdf`);
   }
 }

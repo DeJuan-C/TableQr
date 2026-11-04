@@ -26,7 +26,8 @@ export class InvalidSession {
     (
       {
         missing: 'Walang QR token. Kailangan mong mag-scan ng QR code ng mesa.',
-        expired: 'Expired na ang QR session ng mesang ito.',
+        expired: 'Expired na ang QR session ng mesang ito. I-scan ulit ang QR sa mesa.',
+        ended: 'Tapos na ang session ng mesang ito. Naabisuhan na ang staff; hintayin sandali o magtanong sa staff.',
         inactive: 'Naka-deactivate ang mesang ito.',
         invalid: 'Hindi valid ang QR code.',
         error: 'May problema sa pag-check ng session. Subukan ulit.',

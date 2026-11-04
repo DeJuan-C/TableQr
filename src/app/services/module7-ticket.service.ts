@@ -70,9 +70,10 @@ export class Module7TicketService {
       .sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime());
   });
 
-  readonly selectedTicket = computed(
-    () => this.activeTickets().find((t) => t.id === this.selectedTicketIdState()) ?? this.activeTickets()[0],
-  );
+    readonly selectedTicket = computed(() => {
+    const list = this.activeTickets();
+    return list.find((t) => t.id === this.selectedTicketIdState()) ?? list[list.length - 1];
+  });
   readonly recalculationCount = this.recalculationCountState.asReadonly();
   readonly lastCalculated = this.lastCalculatedState.asReadonly();
   readonly complianceLog = computed(() =>
