@@ -40,7 +40,6 @@ export const routes: Routes = [
   // CASHIER (+ admin)
   { path: 'cashier/pos',      canActivate: [roleGuard(['admin','cashier'])], loadComponent: () => import('./pages/cashier/pos-terminal/pos-terminal').then(m => m.PosTerminal) },
   { path: 'cashier/bills',    canActivate: [roleGuard(['admin','cashier'])], loadComponent: () => import('./pages/cashier/bill-settlement/bill-settlement').then(m => m.BillSettlement) },
-  { path: 'cashier/discount', canActivate: [roleGuard(['admin','cashier'])], loadComponent: () => import('./pages/cashier/discount-manager/discount-manager').then(m => m.DiscountManager) },
   { path: 'cashier/receipts', canActivate: [roleGuard(['admin','cashier'])], loadComponent: () => import('./pages/cashier/receipts/receipts').then(m => m.Receipts) },
   { path: 'cashier/closing',  canActivate: [roleGuard(['admin','cashier'])], loadComponent: () => import('./pages/cashier/day-closing/day-closing').then(m => m.DayClosingComponent) },
 

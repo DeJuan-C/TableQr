@@ -164,7 +164,7 @@ export class CashierStore {
     })));
   }
 
-      async loadOpenBills() {
+  async loadOpenBills() {
     const { data, error } = await this.sb
       .from('orders')
       .select(`
@@ -173,22 +173,22 @@ export class CashierStore {
         order_item ( menu_id, quantity, item_subtotal, menu ( menu_name, menu_category ) )
       `)
       .eq('order_status', 'pending')
-      // This tells Supabase to get bills that are either 'open' OR 'unpaid'
       .in('bill.bill_status', ['open', 'unpaid']); 
 
     if (error) { console.error("Error loading orders:", error); return; }
     
-    // ... rest of the code
-    
     this.bills.set((data ?? []).map((r: any) => {
-      // ... (the rest of your mapping code stays exactly the same)
       const billData = Array.isArray(r.bill) ? r.bill[0] : r.bill;
       const table = this.tables().find(t => t.id === r.table_id);
 
       const subtotal = Number(r.subtotal || 0);
       const discountAmount = Number(billData?.discount_amount || 0);
-      const serviceCharge = Math.round(subtotal * 0.05);
-      const dbTotal = Number(billData?.total_amount || (subtotal + serviceCharge));
+      
+      // Calculate service charge based on discounted amount
+      const taxBase = subtotal - discountAmount;
+      const serviceCharge = Math.round(taxBase * 0.05);
+      
+      const dbTotal = Number(billData?.total_amount || (taxBase + serviceCharge));
 
       return {
         id: r.order_id,
@@ -215,7 +215,7 @@ export class CashierStore {
     }));
   }
 
-    async loadTransactions() {
+  async loadTransactions() {
     const { data, error } = await this.sb
       .from('payment')
       .select(`
@@ -229,14 +229,13 @@ export class CashierStore {
           )
         )
       `)
-      .eq('payment_status', 'completed') // <--- ADD THIS LINE
+      .eq('payment_status', 'completed')
       .order('payment_id', { ascending: false })
       .limit(500);
 
     if (error) { console.error("Error loading payments:", error); return; }
     
     this.transactions.set((data ?? []).map((r: any) => {
-      // ... (the rest of your mapping code stays exactly the same)
       const billData = Array.isArray(r.bill) ? r.bill[0] : r.bill;
       const orderData = Array.isArray(billData?.orders) ? billData.orders[0] : billData?.orders;
       
@@ -251,9 +250,11 @@ export class CashierStore {
       const dbSubtotal = Number(orderData?.subtotal || 0);
       const discountAmount = Number(billData?.discount_amount || 0);
       
+      // FIX: Calculate service charge based on the discounted amount
       const foodPrice = dbSubtotal; 
-      const serviceCharge = Math.round(foodPrice * 0.05);
-      const finalTotal = foodPrice + serviceCharge - discountAmount;
+      const taxBase = foodPrice - discountAmount;
+      const serviceCharge = Math.round(taxBase * 0.05);
+      const finalTotal = taxBase + serviceCharge;
 
       const paidDate = r.paid_at ? new Date(r.paid_at) : new Date(orderData?.created_at || new Date());
 
@@ -265,7 +266,17 @@ export class CashierStore {
         items: items, 
         subtotal: foodPrice,         
         serviceCharge: serviceCharge, 
-        discountAmount: discountAmount, 
+        discountAmount: discountAmount,
+        
+        // Pass the discount object to the receipt
+        discount: discountAmount > 0 ? {
+          type: 'senior', 
+          label: 'Discount', 
+          percent: 20, 
+          appliedAt: new Date(), 
+          appliedBy: 'Cashier'
+        } : undefined,
+
         total: finalTotal,           
         amountTendered: finalTotal, 
         change: 0, 
@@ -468,7 +479,7 @@ export class CashierStore {
 
   async applyDiscount(
     billId: string, 
-    input: { type: DiscountType; customerName?: string; idNumber?: string; cardData?: string; appliedBy?: string },
+    input: { type: DiscountType; percent: number; customerName?: string; idNumber?: string; appliedBy?: string },
   ) {
     const { data: billData, error: billError } = await this.sb
       .from('bill')
@@ -485,8 +496,7 @@ export class CashierStore {
       .single();
 
     const subtotal = Number(orderData?.subtotal || 0);
-    const percent = 20; 
-    const discountAmount = Math.round((subtotal * percent) / 100);
+    const discountAmount = Math.round((subtotal * input.percent) / 100);
     const taxBase = subtotal - discountAmount;
     const newServiceCharge = Math.round(taxBase * 0.05);
     const newTotal = taxBase + newServiceCharge;
@@ -505,12 +515,11 @@ export class CashierStore {
       bill_id: billData.bill_id || billId, 
       action: 'applied',
       discount_type: input.type,
-      label: input.type === 'senior' ? 'Senior Citizen' : 'PWD Discount',
-      percent: percent,
+      label: input.type === 'senior' ? 'Senior Citizen' : (input.type === 'pwd' ? 'PWD Discount' : 'Custom Discount'),
+      percent: input.percent,
       amount: discountAmount,
       customer_name: input.customerName ?? null,
       id_number: input.idNumber ?? null,
-      card_data: input.cardData ?? null,
       applied_by: input.appliedBy ?? 'Cashier 1'
     });
 
@@ -614,10 +623,6 @@ export class CashierStore {
     return closing;
   }
 
-  // ─── Stubs to prevent compile errors ─────────────────────────────────────────
-
-  async loadCashDrawer() {
-    // Stub for Day Closing
-  }
-
+  // Stubs for Day Closing to prevent compile errors
+  async loadCashDrawer() {}
 }
