@@ -9,13 +9,13 @@ import {
 } from '../../../services/inventory.service';
 
 @Component({
-  selector: 'app-module16',
+  selector: 'app-ingredient-master',
   standalone: true,
   imports: [FormsModule, DecimalPipe],
   templateUrl: './ingredient-master.html',
   styleUrl: './ingredient-master.css',
 })
-export class Module16 {
+export class IngredientMaster {
   private inv = inject(InventoryService);
 
   readonly suppliers = this.inv.suppliers;
