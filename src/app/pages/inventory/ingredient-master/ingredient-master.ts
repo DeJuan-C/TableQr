@@ -12,8 +12,8 @@ import {
   selector: 'app-module16',
   standalone: true,
   imports: [FormsModule, DecimalPipe],
-  templateUrl: './module16.html',
-  styleUrl: './module16.css',
+  templateUrl: './ingredient-master.html',
+  styleUrl: './ingredient-master.css',
 })
 export class Module16 {
   private inv = inject(InventoryService);
